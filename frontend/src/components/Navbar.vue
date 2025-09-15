@@ -111,8 +111,7 @@ onUnmounted(() => {
 }
 
 .navbar-content {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   padding: 1.5rem 2rem;
   display: flex;
   justify-content: space-between;
@@ -120,27 +119,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.navbar-content::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 60%;
-  background: linear-gradient(180deg, transparent, #d4af37, transparent);
-}
-
-.navbar-content::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 60%;
-  background: linear-gradient(180deg, transparent, #d4af37, transparent);
-}
 
 /* Logo */
 .logo {
@@ -199,7 +177,7 @@ onUnmounted(() => {
 /* Desktop Navigation */
 .desktop-nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 2rem;
 }
 
 .nav-link {
