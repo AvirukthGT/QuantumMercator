@@ -25,12 +25,22 @@ const chartCreationTimeout = ref<NodeJS.Timeout | null>(null)
 const createChart = () => {
   console.log('createChart called - chartRef:', !!chartRef.value, 'isCreating:', isCreatingChart.value, 'hasInstance:', !!chartInstance.value)
 
-  if (!chartRef.value || isCreatingChart.value || chartInstance.value) {
-    console.log('Skipping chart creation - missing ref, creating, or exists')
+  if (!chartRef.value || isCreatingChart.value) {
+    console.log('Skipping chart creation - missing ref or creating')
+    return
+  }
+
+  if (chartInstance.value) {
+    console.log('Chart already exists, destroying first')
+    destroyChart()
     return
   }
 
   console.log('Creating chart with data:', props.data.length, 'points')
+  console.log('Canvas element:', chartRef.value)
+  console.log('Canvas dimensions:', chartRef.value?.width, 'x', chartRef.value?.height)
+  console.log('Canvas client dimensions:', chartRef.value?.clientWidth, 'x', chartRef.value?.clientHeight)
+
   isCreatingChart.value = true
 
   // Destroy existing chart if any
@@ -40,6 +50,26 @@ const createChart = () => {
   }
 
   try {
+    // Ensure canvas has proper dimensions
+    if (chartRef.value) {
+      // Check for existing chart on this canvas and destroy it
+      const existingChart = Chart.getChart(chartRef.value)
+      if (existingChart) {
+        console.log('Found existing chart on canvas, destroying it first')
+        existingChart.destroy()
+      }
+
+      chartRef.value.width = chartRef.value.clientWidth
+      chartRef.value.height = chartRef.value.clientHeight
+      console.log('Set canvas dimensions to:', chartRef.value.width, 'x', chartRef.value.height)
+
+      // Clear any existing chart data from canvas
+      const ctx = chartRef.value.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, chartRef.value.width, chartRef.value.height)
+      }
+    }
+
     const labels = props.data.map(d => {
       const date = new Date(d.date)
       if (props.selectedTimeframe === '1D') {
@@ -150,6 +180,21 @@ const createChart = () => {
     })
 
     console.log('Chart created successfully:', !!chartInstance.value)
+
+    // Force chart to render
+    if (chartInstance.value) {
+      chartInstance.value.update('none')
+      console.log('Chart update called after creation')
+
+      // Try to resize and update again after a short delay
+      setTimeout(() => {
+        if (chartInstance.value) {
+          chartInstance.value.resize()
+          chartInstance.value.update('none')
+          console.log('Chart resize and update called')
+        }
+      }, 100)
+    }
   } catch (error) {
     console.error('Error creating chart:', error)
     chartInstance.value = null
@@ -160,28 +205,58 @@ const createChart = () => {
 
 const destroyChart = () => {
   if (chartInstance.value) {
-    chartInstance.value.destroy()
+    console.log('Destroying chart with ID:', chartInstance.value.id)
+    try {
+      // Properly destroy the chart and clear from Chart.js registry
+      chartInstance.value.destroy()
+    } catch (error) {
+      console.error('Error destroying chart:', error)
+    }
     chartInstance.value = null
+  }
+
+  // Also check for any chart on the canvas and destroy it
+  if (chartRef.value) {
+    const existingChart = Chart.getChart(chartRef.value)
+    if (existingChart) {
+      console.log('Found additional chart on canvas, destroying it')
+      try {
+        existingChart.destroy()
+      } catch (error) {
+        console.error('Error destroying additional chart:', error)
+      }
+    }
+
+    // Clear the canvas context completely
+    const ctx = chartRef.value.getContext('2d')
+    if (ctx) {
+      ctx.clearRect(0, 0, chartRef.value.width, chartRef.value.height)
+    }
   }
 }
 
-// Debounced chart creation to prevent rapid recreations
-const debouncedCreateChart = () => {
+// Simple chart creation with proper cleanup
+const createChartSafely = () => {
   if (chartCreationTimeout.value) {
     clearTimeout(chartCreationTimeout.value)
   }
 
   chartCreationTimeout.value = setTimeout(() => {
     if (props.data.length > 0 && !isCreatingChart.value) {
+      // Always destroy existing chart first
       if (chartInstance.value) {
         console.log('Destroying existing chart before creating new one')
         destroyChart()
       }
-      nextTick(() => {
-        createChart()
-      })
+
+      // Wait a bit for destruction to complete, then create
+      setTimeout(() => {
+        if (!isCreatingChart.value) {
+          createChart()
+        }
+      }, 150)
     }
-  }, 300)
+  }, 200)
 }
 
 // Simple watcher - only create chart when data changes and we don't have one
@@ -189,7 +264,7 @@ watch(() => props.data, (newData) => {
   console.log('Data watcher triggered - data length:', newData.length, 'hasChart:', !!chartInstance.value, 'isCreating:', isCreatingChart.value)
 
   if (newData.length > 0) {
-    debouncedCreateChart()
+    createChartSafely()
   }
 }, { immediate: true })
 
@@ -205,7 +280,7 @@ watch(() => props.isLoading, (isLoading) => {
 onMounted(() => {
   console.log('PriceChart mounted, data length:', props.data.length, 'hasChart:', !!chartInstance.value, 'isCreating:', isCreatingChart.value)
   if (props.data.length > 0) {
-    debouncedCreateChart()
+    createChartSafely()
   }
 })
 
